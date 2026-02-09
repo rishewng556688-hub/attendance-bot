@@ -16,13 +16,10 @@ from aiogram.enums import ParseMode
 
 from openpyxl import Workbook
 
-# ================= 基础配置 =================
-
 TOKEN = os.getenv("TG_BOT_TOKEN")
 
-# 管理员 Telegram user_id（可以多个）
 ADMIN_IDS = {
-    8114765174,   # ← 换成你的 user_id
+    8114765174  # 改成你的 user_id
 }
 
 DB_FILE = "attendance.db"
@@ -32,6 +29,7 @@ bot = Bot(
     default=DefaultBotProperties(parse_mode=ParseMode.HTML)
 )
 dp = Dispatcher()
+
 
 # ================= 数据库 =================
 
@@ -109,7 +107,8 @@ def get_month_records(chat_id):
     conn.close()
     return rows
 
-# ================= 业务逻辑 =================
+
+# ================= 计算逻辑 =================
 
 def calculate_work_time(records):
     total_seconds = 0
@@ -153,6 +152,7 @@ def count_actions(records):
             counts[action] += 1
     return counts
 
+
 # ================= Excel =================
 
 def export_today_excel(chat_id):
@@ -167,19 +167,19 @@ def export_today_excel(chat_id):
     ws = wb.active
     ws.title = "今日考勤"
 
-    ws.append([
-        "姓名", "工作时长", "抽烟", "吃饭", "上厕所", "离开"
-    ])
+    ws.append(["姓名", "工作时长", "抽烟", "吃饭", "上厕所", "离开"])
 
     for data in users.values():
         records = data["records"]
+        counts = count_actions(records)
+
         ws.append([
             data["name"],
             calculate_work_time(records),
-            count_actions(records)["抽烟"],
-            count_actions(records)["吃饭"],
-            count_actions(records)["上厕所"],
-            count_actions(records)["离开"],
+            counts["抽烟"],
+            counts["吃饭"],
+            counts["上厕所"],
+            counts["离开"],
         ])
 
     filename = f"attendance_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
@@ -199,45 +199,49 @@ def export_month_excel(chat_id):
     ws = wb.active
     ws.title = "本月考勤"
 
-    ws.append([
-        "姓名", "本月工作时长", "抽烟", "吃饭", "上厕所", "离开"
-    ])
+    ws.append(["姓名", "工作时长", "抽烟", "吃饭", "上厕所", "离开"])
 
     for data in users.values():
         records = data["records"]
+        counts = count_actions(records)
+
         ws.append([
             data["name"],
             calculate_work_time(records),
-            count_actions(records)["抽烟"],
-            count_actions(records)["吃饭"],
-            count_actions(records)["上厕所"],
-            count_actions(records)["离开"],
+            counts["抽烟"],
+            counts["吃饭"],
+            counts["上厕所"],
+            counts["离开"],
         ])
 
     filename = f"attendance_{datetime.now().strftime('%Y-%m')}.xlsx"
     wb.save(filename)
     return filename
 
+
 # ================= UI =================
 
 def keyboard():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="🟢 上班", callback_data="上班"),
-            InlineKeyboardButton(text="🔴 下班", callback_data="下班")
-        ],
-        [
-            InlineKeyboardButton(text="🚬 抽烟", callback_data="抽烟"),
-            InlineKeyboardButton(text="🚻 上厕所", callback_data="上厕所")
-        ],
-        [
-            InlineKeyboardButton(text="🍚 吃饭", callback_data="吃饭"),
-            InlineKeyboardButton(text="🚶 离开", callback_data="离开")
-        ],
-        [
-            InlineKeyboardButton(text="🪑 回坐", callback_data="回坐")
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🟢 上班", callback_data="上班"),
+                InlineKeyboardButton(text="🔴 下班", callback_data="下班")
+            ],
+            [
+                InlineKeyboardButton(text="🚬 抽烟", callback_data="抽烟"),
+                InlineKeyboardButton(text="🚻 上厕所", callback_data="上厕所")
+            ],
+            [
+                InlineKeyboardButton(text="🍚 吃饭", callback_data="吃饭"),
+                InlineKeyboardButton(text="🚶 离开", callback_data="离开")
+            ],
+            [
+                InlineKeyboardButton(text="🪑 回坐", callback_data="回坐")
+            ]
         ]
     )
+
 
 # ================= 处理器 =================
 
@@ -254,6 +258,7 @@ async def handle_callback(callback: CallbackQuery):
         callback.from_user.first_name,
         callback.data
     )
+
     await callback.answer("已记录")
     await callback.message.reply(
         f"{callback.from_user.first_name} 已打卡：{callback.data}"
@@ -263,17 +268,20 @@ async def handle_callback(callback: CallbackQuery):
 @dp.message(Command("today"))
 async def today(message: Message):
     records = get_today_records(message.chat.id, message.from_user.id)
+
     if not records:
         await message.reply("今天还没有打卡记录。")
         return
 
     text = "📋 今日记录：\n\n"
+
     for action, ts in records:
         text += f"{ts[11:]} - {action}\n"
 
     text += f"\n⏱ 实际工作时间：{calculate_work_time(records)}\n"
 
     counts = count_actions(records)
+
     text += (
         f"🚬 抽烟：{counts['抽烟']} 次\n"
         f"🍚 吃饭：{counts['吃饭']} 次\n"
@@ -303,12 +311,14 @@ async def admin_month_excel(message: Message):
     filename = export_month_excel(message.chat.id)
     await message.reply_document(open(filename, "rb"), caption="📅 本月考勤 Excel")
 
+
 # ================= 启动 =================
 
 async def main():
     init_db()
     print("Bot started...")
     await dp.start_polling(bot)
+
 
 if __name__ == "__main__":
     asyncio.run(main())
